@@ -51,7 +51,7 @@ def get_image_caption(image_bytes):
 
 def extract_images_and_caption(file_path):
     """Extract images from PDF and return list of Document chunks with captions"""
-    from langchain.docstore.document import Document
+    from langchain_core.documents import Document
     doc = fitz.open(file_path)
     image_chunks = []
     
