@@ -36,7 +36,8 @@ venv.bak/
 hello-env/
 
 # Streamlit
-.streamlit/
+.streamlit/*
+!.streamlit/config.toml
 
 # Documents
 *.pdf

@@ -1,0 +1,4 @@
+[server]
+# Prevent noisy import-path scanning of large lazy modules (e.g., transformers)
+# that can raise optional dependency errors in Streamlit watcher logs.
+fileWatcherType = "none"

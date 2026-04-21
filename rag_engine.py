@@ -18,7 +18,10 @@ class RAGEngine:
     def __init__(self):
         self.client = MongoClient(MONGODB_URI)
         self.collection = self.client[DB_NAME][COLLECTION_NAME]
-        self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2",
+            model_kwargs={"device": "cpu"}
+        )
         self.vector_search = MongoDBAtlasVectorSearch(
             collection=self.collection,
             embedding=self.embeddings,
@@ -26,15 +29,29 @@ class RAGEngine:
         )
         self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-    def get_context(self, query):
+    def get_context(self, query, doc_id=None):
         """Retrieve relevant document chunks from MongoDB"""
-        results = self.vector_search.similarity_search(query, k=5)
+        if doc_id:
+            try:
+                results = self.vector_search.similarity_search(
+                    query,
+                    k=5,
+                    pre_filter={"doc_id": doc_id}
+                )
+            except Exception:
+                # Fallback when Atlas vector index does not support this pre_filter path yet.
+                candidates = self.vector_search.similarity_search(query, k=50)
+                results = [doc for doc in candidates if doc.metadata.get("doc_id") == doc_id][:5]
+        else:
+            results = self.vector_search.similarity_search(query, k=5)
         context = "\n\n".join([doc.page_content for doc in results])
         return context
 
-    def generate_answer(self, query):
+    def generate_answer(self, query, doc_id=None):
         """Generate answer using Groq with retrieved context"""
-        context = self.get_context(query)
+        context = self.get_context(query, doc_id=doc_id)
+        if not context:
+            return "I couldn't find relevant context for the current document. Please re-ingest the PDF and try again."
         
         prompt = f"""
         You are a helpful AI Assistant. Use the provided context to answer the user's question.

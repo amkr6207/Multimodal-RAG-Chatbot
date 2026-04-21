@@ -28,18 +28,21 @@ A high-performance Retrieval-Augmented Generation (RAG) system that allows users
    git clone <your-repo-url>
    cd Multimodal-RAG-Chatbot
    ```
-2. **Install Dependencies**:
+2. **Create and Activate Environment**:
+   ```bash
+   conda create -n chatbot-env python=3.12 -y
+   conda activate chatbot-env
+   ```
+3. **Install Dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
-3. **Configure Environment Variables**:
+4. **Configure Environment Variables**:
    Create a `.env` file based on `.env.example` and add your:
    - `GROQ_API_KEY`
    - `MONGODB_ATLAS_CLUSTER_URI`
-4. **Run the App**:
+   - `GOOGLE_API_KEY` is optional (only needed if you want Gemini fallback/testing).
+5. **Run the App**:
    ```bash
    streamlit run app.py
    ```
-
----
-*Created by Aman - Data Science Portfolio Project*

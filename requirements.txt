@@ -5,6 +5,8 @@ langchain-huggingface
 langchain-mongodb
 langchain-google-genai
 sentence-transformers
+torch
+torchvision
 groq
 
 # Database

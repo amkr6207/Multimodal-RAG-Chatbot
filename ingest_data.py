@@ -1,5 +1,6 @@
 import os
 import pymongo
+import hashlib
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -49,11 +50,12 @@ def get_image_caption(image_bytes):
         print(f"Error captioning image: {e}")
         return ""
 
-def extract_images_and_caption(file_path):
+def extract_images_and_caption(file_path, metadata_fields=None):
     """Extract images from PDF and return list of Document chunks with captions"""
     from langchain_core.documents import Document
     doc = fitz.open(file_path)
     image_chunks = []
+    metadata_fields = metadata_fields or {}
     
     for page_index in range(len(doc)):
         page = doc[page_index]
@@ -69,12 +71,17 @@ def extract_images_and_caption(file_path):
             
             if caption:
                 metadata = {"source": file_path, "page": page_index + 1, "type": "image"}
+                metadata.update(metadata_fields)
                 image_chunks.append(Document(page_content=f"[Image/Chart Description]: {caption}", metadata=metadata))
                 
     return image_chunks
 
-def ingest_pdf(file_path):
+def ingest_pdf(file_path, doc_id=None, source_name=None):
     print(f"--- Processing: {file_path} ---")
+    if not doc_id:
+        with open(file_path, "rb") as f:
+            doc_id = hashlib.sha256(f.read()).hexdigest()[:16]
+    source_name = source_name or os.path.basename(file_path)
     
     # 1. Load PDF
     loader = PyPDFLoader(file_path)
@@ -83,10 +90,16 @@ def ingest_pdf(file_path):
     # 2. Split Text
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     chunks = text_splitter.split_documents(data)
+    for chunk in chunks:
+        chunk.metadata["doc_id"] = doc_id
+        chunk.metadata["source_name"] = source_name
     
     # 2b. Extract and Caption Images
     print("Searching for images/charts...")
-    image_chunks = extract_images_and_caption(file_path)
+    image_chunks = extract_images_and_caption(
+        file_path,
+        metadata_fields={"doc_id": doc_id, "source_name": source_name}
+    )
     if image_chunks:
         print(f"Added {len(image_chunks)} image captions to index.")
         chunks.extend(image_chunks)
@@ -96,11 +109,15 @@ def ingest_pdf(file_path):
     # 3. Setup Embeddings (Local Model)
     try:
         print("Initializing local embedding model (HuggingFace)...")
-        embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        embeddings = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2",
+            model_kwargs={"device": "cpu"}
+        )
         
         # 4. Connect to MongoDB and Store
         client = pymongo.MongoClient(MONGODB_URI)
         collection = client[DB_NAME][COLLECTION_NAME]
+        collection.delete_many({"doc_id": doc_id})
         
         print("Storing embeddings in MongoDB Atlas...")
         vector_search = MongoDBAtlasVectorSearch.from_documents(
@@ -110,7 +127,7 @@ def ingest_pdf(file_path):
             index_name=ATLAS_VECTOR_SEARCH_INDEX_NAME
         )
         print("✅ Ingestion successful!")
-        return vector_search
+        return {"vector_search": vector_search, "doc_id": doc_id}
     except Exception as e:
         print(f"❌ Ingestion failed: {e}")
         if "quota" in str(e).lower() or "429" in str(e):
