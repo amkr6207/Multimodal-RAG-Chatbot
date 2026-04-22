@@ -36,41 +36,76 @@ except Exception as e:
     st.error(f"Failed to initialize RAG Engine: {e}")
     st.stop()
 
+# Session state defaults
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "ingested_docs" not in st.session_state:
+    st.session_state.ingested_docs = {}
+if "selected_doc_ids" not in st.session_state:
+    st.session_state.selected_doc_ids = []
+
 # Sidebar for file upload
 with st.sidebar:
     st.title("📂 Document Manager")
-    uploaded_file = st.file_uploader("Upload a PDF for RAG", type="pdf")
-    
-    if uploaded_file is not None:
-        if st.button("Ingest Document"):
-            with st.spinner("Processing PDF and Storing Embeddings..."):
-                # Save uploaded file to temp directory
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                    file_bytes = uploaded_file.getvalue()
-                    tmp.write(file_bytes)
-                    tmp_path = tmp.name
-                
-                # Ingest
-                doc_id = hashlib.sha256(file_bytes).hexdigest()[:16]
-                result = ingest_pdf(tmp_path, doc_id=doc_id, source_name=uploaded_file.name)
-                os.remove(tmp_path)
-                
-                if result:
-                    st.session_state.active_doc_id = doc_id
-                    st.session_state.active_source_name = uploaded_file.name
-                    st.session_state.messages = []
-                    st.success("✅ Document Ingested Successfully!")
-                else:
-                    st.error("❌ Ingestion Failed.")
+    uploaded_files = st.file_uploader(
+        "Upload one or more PDFs for RAG",
+        type="pdf",
+        accept_multiple_files=True
+    )
+
+    if uploaded_files:
+        if st.button("Ingest Selected Documents"):
+            success_count = 0
+            failed_files = []
+
+            for uploaded_file in uploaded_files:
+                with st.spinner(f"Processing {uploaded_file.name}..."):
+                    tmp_path = None
+                    try:
+                        file_bytes = uploaded_file.getvalue()
+                        doc_id = hashlib.sha256(file_bytes).hexdigest()[:16]
+
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                            tmp.write(file_bytes)
+                            tmp_path = tmp.name
+
+                        result = ingest_pdf(tmp_path, doc_id=doc_id, source_name=uploaded_file.name)
+                        if result:
+                            st.session_state.ingested_docs[doc_id] = uploaded_file.name
+                            success_count += 1
+                        else:
+                            failed_files.append(uploaded_file.name)
+                    except Exception:
+                        failed_files.append(uploaded_file.name)
+                    finally:
+                        if tmp_path and os.path.exists(tmp_path):
+                            os.remove(tmp_path)
+
+            if success_count:
+                st.success(f"✅ Ingested {success_count} document(s).")
+            if failed_files:
+                st.error(f"❌ Failed: {', '.join(failed_files)}")
+
+    if st.session_state.ingested_docs:
+        st.subheader("Indexed Documents")
+        doc_options = {
+            f"{name} ({doc_id[:8]})": doc_id
+            for doc_id, name in st.session_state.ingested_docs.items()
+        }
+
+        selected_labels = st.multiselect(
+            "Filter retrieval to these files",
+            options=list(doc_options.keys()),
+            default=list(doc_options.keys()),
+        )
+        st.session_state.selected_doc_ids = [doc_options[label] for label in selected_labels]
+
+        if st.button("Clear Chat"):
+            st.session_state.messages = []
+            st.rerun()
 
 st.title("📄 AI Resume Chatbot")
 st.caption("Ask me anything about the uploaded documents!")
-
-# Chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "active_doc_id" not in st.session_state:
-    st.session_state.active_doc_id = None
 
 # Display chat messages
 for message in st.session_state.messages:
@@ -79,8 +114,13 @@ for message in st.session_state.messages:
 
 # User input
 if prompt := st.chat_input("What would you like to know?"):
-    if not st.session_state.active_doc_id:
-        st.error("Please upload and ingest a document first.")
+    if not st.session_state.ingested_docs:
+        st.error("Please upload and ingest at least one document first.")
+        st.stop()
+
+    doc_filter = st.session_state.selected_doc_ids
+    if not doc_filter:
+        st.error("Please select at least one indexed file in the sidebar.")
         st.stop()
 
     # Add user message to history
@@ -92,7 +132,7 @@ if prompt := st.chat_input("What would you like to know?"):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                response = engine.generate_answer(prompt, doc_id=st.session_state.active_doc_id)
+                response = engine.generate_answer(prompt, doc_ids=doc_filter)
                 st.markdown(response)
                 st.session_state.messages.append({"role": "assistant", "content": response})
             except Exception as e:
