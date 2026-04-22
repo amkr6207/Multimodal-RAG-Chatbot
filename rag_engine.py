@@ -29,29 +29,38 @@ class RAGEngine:
         )
         self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-    def get_context(self, query, doc_id=None):
+    def get_context(self, query, doc_ids=None):
         """Retrieve relevant document chunks from MongoDB"""
-        if doc_id:
+        if doc_ids:
+            if isinstance(doc_ids, str):
+                doc_ids = [doc_ids]
+            doc_ids = [doc_id for doc_id in doc_ids if doc_id]
+        else:
+            doc_ids = None
+
+        if doc_ids:
+            pre_filter = {"doc_id": doc_ids[0]} if len(doc_ids) == 1 else {"doc_id": {"$in": doc_ids}}
             try:
                 results = self.vector_search.similarity_search(
                     query,
                     k=5,
-                    pre_filter={"doc_id": doc_id}
+                    pre_filter=pre_filter
                 )
             except Exception:
                 # Fallback when Atlas vector index does not support this pre_filter path yet.
-                candidates = self.vector_search.similarity_search(query, k=50)
-                results = [doc for doc in candidates if doc.metadata.get("doc_id") == doc_id][:5]
+                candidates = self.vector_search.similarity_search(query, k=75)
+                selected = set(doc_ids)
+                results = [doc for doc in candidates if doc.metadata.get("doc_id") in selected][:5]
         else:
             results = self.vector_search.similarity_search(query, k=5)
         context = "\n\n".join([doc.page_content for doc in results])
         return context
 
-    def generate_answer(self, query, doc_id=None):
+    def generate_answer(self, query, doc_ids=None):
         """Generate answer using Groq with retrieved context"""
-        context = self.get_context(query, doc_id=doc_id)
+        context = self.get_context(query, doc_ids=doc_ids)
         if not context:
-            return "I couldn't find relevant context for the current document. Please re-ingest the PDF and try again."
+            return "I couldn't find relevant context in the selected document(s). Please re-ingest and try again."
         
         prompt = f"""
         You are a helpful AI Assistant. Use the provided context to answer the user's question.
