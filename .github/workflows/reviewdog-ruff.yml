@@ -1,23 +1,17 @@
-name: Ruff Review
+name: Reviewdog Ruff
 
 on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
-  ruff-pr:
-    if: github.event_name == 'pull_request'
+  ruff-reviewdog:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
 
     steps:
       - name: Checkout
@@ -28,37 +22,21 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run Ruff with Reviewdog (PR)
-        uses: reviewdog/action-ruff@v1
+      - name: Install Ruff
+        run: pip install ruff
+
+      - name: Set up Reviewdog
+        uses: reviewdog/action-setup@v1
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          reporter: github-pr-review
-          fail_level: warning
-          level: warning
-          filter_mode: added
-          ruff_flags: "."
+          reviewdog_version: latest
 
-  ruff-push:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
-      - name: Run Ruff with Reviewdog (Push)
-        uses: reviewdog/action-ruff@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          reporter: github-check
-          fail_level: warning
-          level: warning
-          filter_mode: nofilter
-          ruff_flags: "."
+      - name: Run Ruff with Reviewdog
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ruff check . --output-format=checkstyle \
+            | reviewdog -f=checkstyle \
+                -name="ruff" \
+                -reporter=github-pr-review \
+                -filter-mode=added \
+                -fail-level=warning
