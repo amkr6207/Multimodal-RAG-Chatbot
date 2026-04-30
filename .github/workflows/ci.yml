@@ -11,6 +11,8 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -28,6 +30,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Dependency health check
+        run: |
+          pip check
+
       - name: Syntax check
         run: |
           python -m py_compile app.py ingest_data.py rag_engine.py test_setup.py
+
+      - name: Import smoke check
+        run: |
+          python -c "import app, ingest_data, rag_engine, test_setup; print('imports ok')"
+
+      - name: Setup smoke check
+        run: |
+          python test_setup.py
