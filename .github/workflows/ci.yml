@@ -36,9 +36,13 @@ jobs:
         run: |
           pip check
 
-      - name: Syntax check
+      - name: Lint
         run: |
-          python -m py_compile app.py config.py ingest_data.py rag_engine.py
+          ruff check .
+
+      - name: Format check
+        run: |
+          ruff format --check .
 
       - name: Unit tests with coverage
         run: |

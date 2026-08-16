@@ -12,7 +12,8 @@ from rag_engine import RAGEngine
 st.set_page_config(page_title="AI Resume Chatbot", page_icon="📄", layout="wide")
 
 # Custom CSS for premium look
-st.markdown("""
+st.markdown(
+    """
     <style>
     .main {
         background-color: #0e1117;
@@ -26,12 +27,16 @@ st.markdown("""
         margin-bottom: 10px;
     }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True,
+)
+
 
 # Initialize RAG Engine
 @st.cache_resource
 def get_rag_engine():
     return RAGEngine()
+
 
 try:
     validate_environment()
@@ -56,55 +61,56 @@ if "selected_doc_ids" not in st.session_state:
 with st.sidebar:
     st.title("📂 Document Manager")
     uploaded_files = st.file_uploader(
-        "Upload one or more PDFs for RAG",
-        type="pdf",
-        accept_multiple_files=True
+        "Upload one or more PDFs for RAG", type="pdf", accept_multiple_files=True
     )
 
-    if uploaded_files:
-        if st.button("Ingest Selected Documents"):
-            success_count = 0
-            failed_files = []
-            ingestion_warnings = []
+    if uploaded_files and st.button("Ingest Selected Documents"):
+        success_count = 0
+        failed_files = []
+        ingestion_warnings = []
 
-            for uploaded_file in uploaded_files:
-                with st.spinner(f"Processing {uploaded_file.name}..."):
-                    tmp_path = None
-                    try:
-                        file_bytes = uploaded_file.getvalue()
-                        doc_id = hashlib.sha256(file_bytes).hexdigest()[:16]
+        for uploaded_file in uploaded_files:
+            with st.spinner(f"Processing {uploaded_file.name}..."):
+                tmp_path = None
+                try:
+                    file_bytes = uploaded_file.getvalue()
+                    doc_id = hashlib.sha256(file_bytes).hexdigest()[:16]
 
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                            tmp.write(file_bytes)
-                            tmp_path = tmp.name
+                    with tempfile.NamedTemporaryFile(
+                        delete=False, suffix=".pdf"
+                    ) as tmp:
+                        tmp.write(file_bytes)
+                        tmp_path = tmp.name
 
-                        result = ingest_pdf(tmp_path, doc_id=doc_id, source_name=uploaded_file.name)
-                        if result:
-                            st.session_state.ingested_docs[doc_id] = uploaded_file.name
-                            success_count += 1
-                            if result.warnings:
-                                ingestion_warnings.append(
-                                    f"{uploaded_file.name}: captioned "
-                                    f"{result.images_captioned} of "
-                                    f"{result.images_found} image(s)."
-                                )
-                        else:
-                            failed_files.append(uploaded_file.name)
-                    except Exception:
+                    result = ingest_pdf(
+                        tmp_path, doc_id=doc_id, source_name=uploaded_file.name
+                    )
+                    if result:
+                        st.session_state.ingested_docs[doc_id] = uploaded_file.name
+                        success_count += 1
+                        if result.warnings:
+                            ingestion_warnings.append(
+                                f"{uploaded_file.name}: captioned "
+                                f"{result.images_captioned} of "
+                                f"{result.images_found} image(s)."
+                            )
+                    else:
                         failed_files.append(uploaded_file.name)
-                    finally:
-                        if tmp_path and os.path.exists(tmp_path):
-                            os.remove(tmp_path)
+                except Exception:
+                    failed_files.append(uploaded_file.name)
+                finally:
+                    if tmp_path and os.path.exists(tmp_path):
+                        os.remove(tmp_path)
 
-            if success_count:
-                st.success(f"✅ Ingested {success_count} document(s).")
-            if ingestion_warnings:
-                st.warning(
-                    "⚠️ Text was indexed, but vision processing was incomplete. "
-                    + " ".join(ingestion_warnings)
-                )
-            if failed_files:
-                st.error(f"❌ Failed: {', '.join(failed_files)}")
+        if success_count:
+            st.success(f"✅ Ingested {success_count} document(s).")
+        if ingestion_warnings:
+            st.warning(
+                "⚠️ Text was indexed, but vision processing was incomplete. "
+                + " ".join(ingestion_warnings)
+            )
+        if failed_files:
+            st.error(f"❌ Failed: {', '.join(failed_files)}")
 
     if st.session_state.ingested_docs:
         st.subheader("Indexed Documents")
@@ -118,7 +124,9 @@ with st.sidebar:
             options=list(doc_options.keys()),
             default=list(doc_options.keys()),
         )
-        st.session_state.selected_doc_ids = [doc_options[label] for label in selected_labels]
+        st.session_state.selected_doc_ids = [
+            doc_options[label] for label in selected_labels
+        ]
 
         if st.button("Clear Chat"):
             st.session_state.messages = []
@@ -149,11 +157,10 @@ if prompt := st.chat_input("What would you like to know?"):
         st.markdown(prompt)
 
     # Generate response
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            try:
-                response = engine.generate_answer(prompt, doc_ids=doc_filter)
-                st.markdown(response)
-                st.session_state.messages.append({"role": "assistant", "content": response})
-            except Exception as e:
-                st.error(f"Error generating response: {e}")
+    with st.chat_message("assistant"), st.spinner("Thinking..."):
+        try:
+            response = engine.generate_answer(prompt, doc_ids=doc_filter)
+            st.markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+        except Exception as e:
+            st.error(f"Error generating response: {e}")

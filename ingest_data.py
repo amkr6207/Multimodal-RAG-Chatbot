@@ -21,7 +21,9 @@ load_dotenv()
 # Configuration
 DB_NAME = os.getenv("DB_NAME", "rag_chatbot")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "pdf_embeddings")
-ATLAS_VECTOR_SEARCH_INDEX_NAME = os.getenv("ATLAS_VECTOR_SEARCH_INDEX_NAME", "vector_index")
+ATLAS_VECTOR_SEARCH_INDEX_NAME = os.getenv(
+    "ATLAS_VECTOR_SEARCH_INDEX_NAME", "vector_index"
+)
 MONGODB_URI = os.getenv("MONGODB_ATLAS_CLUSTER_URI")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.6-27b")
@@ -123,9 +125,7 @@ def get_image_caption(
         raise
     # Wrap SDK/network failures in the module's provider-specific exception.
     except Exception as e:
-        raise VisionCaptionError(
-            f"Vision model '{selected_model}' failed: {e}"
-        ) from e
+        raise VisionCaptionError(f"Vision model '{selected_model}' failed: {e}") from e
 
 
 def extract_images_and_caption(
@@ -152,12 +152,10 @@ def extract_images_and_caption(
                     extracted_image = pdf_document.extract_image(image[0])
                     image_bytes = extracted_image["image"]
                     mime_type = _image_mime_type(extracted_image.get("ext"))
-                    print(
-                        f"Captioning image {image_number} on page {page_number}..."
-                    )
+                    print(f"Captioning image {image_number} on page {page_number}...")
                     caption = caption_image(image_bytes, mime_type=mime_type)
                 # One malformed image must not prevent usable PDF text from indexing.
-                except Exception as error:  # noqa: BLE001
+                except Exception as error:
                     warning = (
                         f"Image {image_number} on page {page_number} could not be "
                         f"captioned: {error}"
@@ -188,11 +186,11 @@ def ingest_pdf(file_path, doc_id=None, source_name=None):
         with open(file_path, "rb") as f:
             doc_id = hashlib.sha256(f.read()).hexdigest()[:16]
     source_name = source_name or os.path.basename(file_path)
-    
+
     # 1. Load PDF
     loader = PyPDFLoader(file_path)
     data = loader.load()
-    
+
     # 2. Split Text
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     chunks = text_splitter.split_documents(data)
@@ -204,8 +202,7 @@ def ingest_pdf(file_path, doc_id=None, source_name=None):
     # 2b. Extract and Caption Images
     print("Searching for images/charts...")
     image_result = extract_images_and_caption(
-        file_path,
-        metadata_fields={"doc_id": doc_id, "source_name": source_name}
+        file_path, metadata_fields={"doc_id": doc_id, "source_name": source_name}
     )
     if image_result.chunks:
         print(f"Added {image_result.images_captioned} image captions to index.")
@@ -216,28 +213,27 @@ def ingest_pdf(file_path, doc_id=None, source_name=None):
             "Vision ingestion completed with warnings: "
             f"{image_result.images_failed} of {image_result.images_found} image(s) failed."
         )
-    
+
     print(f"Total processing units: {len(chunks)}")
 
     # 3. Setup Embeddings (Local Model)
     try:
         print("Initializing local embedding model (HuggingFace)...")
         embeddings = HuggingFaceEmbeddings(
-            model_name="all-MiniLM-L6-v2",
-            model_kwargs={"device": "cpu"}
+            model_name="all-MiniLM-L6-v2", model_kwargs={"device": "cpu"}
         )
-        
+
         # 4. Connect to MongoDB and Store
         client = pymongo.MongoClient(MONGODB_URI)
         collection = client[DB_NAME][COLLECTION_NAME]
         collection.delete_many({"doc_id": doc_id})
-        
+
         print("Storing embeddings in MongoDB Atlas...")
         vector_search = MongoDBAtlasVectorSearch.from_documents(
             documents=chunks,
             embedding=embeddings,
             collection=collection,
-            index_name=ATLAS_VECTOR_SEARCH_INDEX_NAME
+            index_name=ATLAS_VECTOR_SEARCH_INDEX_NAME,
         )
         print("✅ Ingestion successful!")
         return IngestionResult(
@@ -250,7 +246,7 @@ def ingest_pdf(file_path, doc_id=None, source_name=None):
             warnings=image_result.warnings,
         )
     # Convert embedding/database failures into the function's existing failure result.
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"❌ Ingestion failed: {e}")
         if "quota" in str(e).lower() or "429" in str(e):
             print("TIP: A provider rate limit was reached. Wait and try again.")
