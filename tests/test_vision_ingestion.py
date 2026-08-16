@@ -118,7 +118,8 @@ def test_extract_images_reports_partial_success(monkeypatch):
     assert result.chunks[0].page_content.startswith("[Image/Chart Description]")
     assert result.chunks[0].metadata == {
         "source": "report.pdf",
-        "page": 1,
+        "page": 0,
+        "page_number": 1,
         "type": "image",
         "doc_id": "doc-1",
         "source_name": "report.pdf",
@@ -190,6 +191,8 @@ def test_ingest_pdf_returns_warning_summary_without_external_calls(monkeypatch):
     assert "rate limited" in result.warnings[0]
     assert text_chunk.metadata["doc_id"] == "doc-1"
     assert text_chunk.metadata["source_name"] == "report.pdf"
+    assert text_chunk.metadata["type"] == "text"
+    assert text_chunk.metadata["page_number"] == 1
     collection.delete_many.assert_called_once_with({"doc_id": "doc-1"})
     stored_documents = store_documents.call_args.kwargs["documents"]
     assert stored_documents == [text_chunk, image_chunk]

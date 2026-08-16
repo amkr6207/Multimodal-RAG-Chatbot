@@ -166,7 +166,8 @@ def extract_images_and_caption(
 
                 metadata = {
                     "source": file_path,
-                    "page": page_number,
+                    "page": page_index,
+                    "page_number": page_number,
                     "type": "image",
                 }
                 metadata.update(metadata_fields)
@@ -197,6 +198,10 @@ def ingest_pdf(file_path, doc_id=None, source_name=None):
     for chunk in chunks:
         chunk.metadata["doc_id"] = doc_id
         chunk.metadata["source_name"] = source_name
+        chunk.metadata["type"] = "text"
+        page_index = chunk.metadata.get("page")
+        if isinstance(page_index, int) and page_index >= 0:
+            chunk.metadata["page_number"] = page_index + 1
     text_chunk_count = len(chunks)
 
     # 2b. Extract and Caption Images

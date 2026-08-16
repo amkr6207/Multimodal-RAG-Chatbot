@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from langchain_core.documents import Document
 
 import rag_engine
 
@@ -16,7 +17,14 @@ def make_engine(response="Answer"):
     engine.groq_client = SimpleNamespace(
         chat=SimpleNamespace(completions=SimpleNamespace(create=create))
     )
-    engine.get_context = MagicMock(return_value="Retrieved PDF context")
+    engine.retrieve_documents = MagicMock(
+        return_value=[
+            Document(
+                page_content="Retrieved PDF context",
+                metadata={"source_name": "report.pdf", "page_number": 2},
+            )
+        ]
+    )
     return engine, create
 
 
@@ -25,6 +33,9 @@ def test_build_prompt_requests_only_a_concise_final_answer():
 
     assert "Return only the final answer" in prompt
     assert "Do not include reasoning" in prompt
+    assert "Do not create citations" in prompt
+    assert "Do not infer facts" in prompt
+    assert "When information is ambiguous" in prompt
     assert "Document evidence" in prompt
     assert "What happened?" in prompt
 
@@ -35,7 +46,11 @@ def test_generate_answer_uses_configured_generation_model(monkeypatch):
 
     answer = engine.generate_answer("What does the chart show?", doc_ids=["doc-1"])
 
-    assert answer == "Answer"
+    assert answer == "Answer\n\n**Sources**\n- report.pdf, page 2"
+    assert (
+        "[Retrieved source 1: report.pdf, page 2]"
+        in (create.call_args.kwargs["messages"][0]["content"])
+    )
     assert create.call_args.kwargs["model"] == "qwen/qwen3.6-27b"
     assert create.call_args.kwargs["reasoning_effort"] == "none"
     assert (
@@ -80,7 +95,7 @@ def test_generate_answer_wraps_provider_failure():
 def test_generate_answer_skips_provider_when_retrieval_is_empty():
     engine = rag_engine.RAGEngine.__new__(rag_engine.RAGEngine)
     engine.groq_client = MagicMock()
-    engine.get_context = MagicMock(return_value="")
+    engine.retrieve_documents = MagicMock(return_value=[])
 
     answer = engine.generate_answer("Unknown question", doc_ids=["doc-1"])
 
