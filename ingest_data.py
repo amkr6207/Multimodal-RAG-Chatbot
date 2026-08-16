@@ -122,7 +122,7 @@ def get_image_caption(
     except VisionCaptionError:
         raise
     # Wrap SDK/network failures in the module's provider-specific exception.
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         raise VisionCaptionError(
             f"Vision model '{selected_model}' failed: {e}"
         ) from e
