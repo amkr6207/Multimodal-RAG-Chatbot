@@ -1,9 +1,12 @@
-import streamlit as st
-import os
 import hashlib
-from rag_engine import RAGEngine
-from ingest_data import ingest_pdf
+import os
 import tempfile
+
+import streamlit as st
+
+from config import ConfigurationError, validate_environment
+from ingest_data import ingest_pdf
+from rag_engine import RAGEngine
 
 # Page configuration
 st.set_page_config(page_title="AI Resume Chatbot", page_icon="📄", layout="wide")
@@ -31,7 +34,12 @@ def get_rag_engine():
     return RAGEngine()
 
 try:
+    validate_environment()
     engine = get_rag_engine()
+except ConfigurationError as error:
+    st.error(f"Configuration error: {error}")
+    st.info("Copy .env.example to .env and provide the required credentials.")
+    st.stop()
 except Exception as e:
     st.error(f"Failed to initialize RAG Engine: {e}")
     st.stop()
@@ -57,6 +65,7 @@ with st.sidebar:
         if st.button("Ingest Selected Documents"):
             success_count = 0
             failed_files = []
+            ingestion_warnings = []
 
             for uploaded_file in uploaded_files:
                 with st.spinner(f"Processing {uploaded_file.name}..."):
@@ -73,6 +82,12 @@ with st.sidebar:
                         if result:
                             st.session_state.ingested_docs[doc_id] = uploaded_file.name
                             success_count += 1
+                            if result.warnings:
+                                ingestion_warnings.append(
+                                    f"{uploaded_file.name}: captioned "
+                                    f"{result.images_captioned} of "
+                                    f"{result.images_found} image(s)."
+                                )
                         else:
                             failed_files.append(uploaded_file.name)
                     except Exception:
@@ -83,6 +98,11 @@ with st.sidebar:
 
             if success_count:
                 st.success(f"✅ Ingested {success_count} document(s).")
+            if ingestion_warnings:
+                st.warning(
+                    "⚠️ Text was indexed, but vision processing was incomplete. "
+                    + " ".join(ingestion_warnings)
+                )
             if failed_files:
                 st.error(f"❌ Failed: {', '.join(failed_files)}")
 
