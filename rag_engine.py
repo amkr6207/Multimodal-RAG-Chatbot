@@ -1,4 +1,5 @@
 import os
+
 from dotenv import load_dotenv
 from groq import Groq
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -13,6 +14,8 @@ DB_NAME = os.getenv("DB_NAME", "rag_chatbot")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "pdf_embeddings")
 ATLAS_VECTOR_SEARCH_INDEX_NAME = os.getenv("ATLAS_VECTOR_SEARCH_INDEX_NAME", "vector_index")
 MONGODB_URI = os.getenv("MONGODB_ATLAS_CLUSTER_URI")
+GROQ_GENERATION_MODEL = os.getenv("GROQ_GENERATION_MODEL", "qwen/qwen3.6-27b")
+
 
 class RAGEngine:
     def __init__(self):
@@ -75,12 +78,13 @@ class RAGEngine:
         """
         
         completion = self.groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_GENERATION_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1
         )
         
         return completion.choices[0].message.content
+
 
 if __name__ == "__main__":
     engine = RAGEngine()
