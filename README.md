@@ -7,6 +7,7 @@ A Retrieval-Augmented Generation (RAG) application for asking questions about PD
 - **Multimodal Ingestion**: Extracts PDF images and captions them with a configurable Groq vision model.
 - **Vector Database**: Stores text chunks, image descriptions, embeddings, and metadata in MongoDB Atlas Vector Search.
 - **Configurable Generation**: Uses a configurable Groq-hosted model to answer questions from retrieved context.
+- **Source Citations**: Appends deduplicated PDF filenames and page numbers from retrieved metadata.
 - **Streamlit UI**: A clean, modern chat interface for easy document management and interaction.
 
 ## 🛠️ Tech Stack
@@ -20,7 +21,7 @@ A Retrieval-Augmented Generation (RAG) application for asking questions about PD
 1. **Ingestion**: PDFs are split into text chunks. Images are extracted and sent to Groq Vision for detailed captioning.
 2. **Indexing**: Both text and image captions are converted into 384-dimensional vectors and stored in MongoDB Atlas.
 3. **Retrieval**: When a user asks a question, the system performs a similarity search in MongoDB to find the most relevant context (text or visuals).
-4. **Generation**: The configured Groq model generates an answer from the retrieved context.
+4. **Generation**: The configured Groq model generates an answer from the retrieved context, and Python appends the retrieved filename/page citations.
 
 ## ⚙️ Setup Instructions
 1. **Clone the repo**:
@@ -56,7 +57,7 @@ Groq-hosted model availability can change. Check the [Groq vision documentation]
 
 ## Tests
 
-The vision-ingestion tests use mocks and do not call Groq, MongoDB, or Hugging Face services.
+The automated tests use mocks and do not call Groq, MongoDB, or Hugging Face services.
 
 ```bash
 pip install -r requirements-dev.txt
@@ -68,5 +69,6 @@ At startup, the application validates that `GROQ_API_KEY` and `MONGODB_ATLAS_CLU
 ## Current Limitations
 
 - Image understanding is caption-based; the original images are not passed to the final answer model.
+- Citations identify retrieved chunks; they are not claim-level attribution from the generation model.
 - Provider availability, rate limits, and network failures can cause partial image ingestion.
 - The project does not yet include a RAG quality or latency benchmark.
